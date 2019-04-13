@@ -508,9 +508,10 @@ class Transaction(BaseTransaction, Immutable):
             raise TypeError('Trying to load classic transaction from SegWit transaction json')
         return tx
 
-    def __init__(self, version: int, ins: list, outs: list,
+    def __init__(self, version: int, timestamp: int, ins: list, outs: list,
                  locktime: Locktime, txid: str=None):
         object.__setattr__(self, 'version', version)
+        object.__setattr__(self, 'timestamp', timestamp)
         object.__setattr__(self, 'ins', tuple(ins))
         object.__setattr__(self, 'outs', tuple(outs))
         object.__setattr__(self, 'locktime', locktime)
@@ -557,21 +558,25 @@ class Transaction(BaseTransaction, Immutable):
         return ceil(self.weight / 4)
 
     def to_json(self):
-        return {'hex': self.hexlify(),
-                'txid': self.txid,
-                'hash': self.hash(),
-                'size': self.size,
-                'vsize': self.vsize,
-                'version': self.version,
-                'locktime': self.locktime.n,
-                'vin': [txin.to_json() for txin in self.ins],
-                'vout': [txout.to_json() for txout in self.outs]}
+        return {
+            'hex': self.hexlify(),
+            'txid': self.txid,
+            'hash': self.hash(),
+            'size': self.size,
+            'vsize': self.vsize,
+            'version': self.version,
+            'timestamp': self.timestamp,
+            'locktime': self.locktime.n,
+            'vin': [txin.to_json() for txin in self.ins],
+            'vout': [txout.to_json() for txout in self.outs],
+        }
 
     @cached
     def serialize(self):
         from itertools import chain
         result = Stream()
         result << self.version.to_bytes(4, 'little')
+        result << self.timestamp.to_bytes(4, 'little')
         result << Parser.to_varint(len(self.ins))
         # the most efficient way to flatten a list in python
         result << bytearray(chain.from_iterable(txin.serialize() for txin in self.ins))
@@ -667,10 +672,12 @@ class Transaction(BaseTransaction, Immutable):
         return ('Transaction(version={}, '
                 'ins=[{}], '
                 'outs=[{}], '
-                'locktime={})'.format(self.version,
-                                      ', '.join(str(txin) for txin in self.ins),
-                                      ', '.join(str(out) for out in self.outs),
-                                      self.locktime))
+                'locktime={}, '
+                'timestamp={} '.format(self.version,
+                                       ', '.join(str(txin) for txin in self.ins),
+                                       ', '.join(str(out) for out in self.outs),
+                                       self.locktime,
+                                       self.timestamp))
 
     def __eq__(self, other):
         return self.hash() == other.hash()
